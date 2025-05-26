@@ -93,6 +93,13 @@ kubectl exec -it test-pod -- sh
 
 ---
 
+$env:KUBECONFIG="d:\itzdd-lab\k8s-kind-nfs-terraform\terraform\~\.kube\config"
+
+kubectl get nodes
+kubectl get pods --all-namespaces
+kubectl get pods -l app=nfs-server
+
+
 ## 📦 后续可扩展内容
 
 * 增加 Helm 支持或 NFS 动态 Provisioner（如 `nfs-subdir-external-provisioner`）
