@@ -1,1 +1,28 @@
-ssh_key.md
+# Terraform相关忽略规则
+# 本地.terraform目录
+**/.terraform/*
+
+# .tfstate文件
+*.tfstate
+*.tfstate.*
+
+# 崩溃日志文件
+crash.log
+crash.*.log
+
+# 排除所有.tfvars文件，这些文件可能包含敏感数据
+*.tfvars
+*.tfvars.json
+
+# 忽略覆盖文件，通常用于本地覆盖配置
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# 忽略CLI配置文件
+.terraformrc
+terraform.rc
+
+# 忽略锁定文件
+.terraform.lock.hcl

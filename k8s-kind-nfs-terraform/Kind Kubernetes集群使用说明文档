@@ -1,0 +1,285 @@
+
+
+
+          
+# Kind Kubernetes集群使用说明文档
+
+## 1. 集群基本信息
+
+本环境使用Terraform和Kind搭建了一个本地Kubernetes学习环境，具有以下特点：
+
+- **集群名称**：kind-cluster
+- **节点配置**：1个控制平面节点 + 2个工作节点
+- **存储方案**：基于NFS的持久化存储
+- **kubeconfig路径**：`~/.kube/config`（实际位置：`d:\itzdd-lab\k8s-kind-nfs-terraform\terraform\~\.kube\config`）
+
+## 2. 环境准备与连接集群
+
+### 设置KUBECONFIG环境变量
+
+在Windows PowerShell中执行：
+
+```powershell
+$env:KUBECONFIG="d:\itzdd-lab\k8s-kind-nfs-terraform\terraform\~\.kube\config"
+```
+
+在Windows命令提示符中执行：
+
+```cmd
+set KUBECONFIG=d:\itzdd-lab\k8s-kind-nfs-terraform\terraform\~\.kube\config
+```
+
+### 验证集群连接
+
+```bash
+kubectl get nodes
+```
+
+预期输出应显示1个控制平面节点和2个工作节点。
+
+## 3. 基本命令参考
+
+### 节点管理
+
+```bash
+# 查看所有节点
+kubectl get nodes
+
+# 查看节点详细信息
+kubectl describe node <节点名称>
+
+# 查看节点资源使用情况
+kubectl top nodes
+```
+
+### Pod管理
+
+```bash
+# 查看所有命名空间的Pod
+kubectl get pods --all-namespaces
+
+# 查看默认命名空间的Pod
+kubectl get pods
+
+# 查看Pod详细信息
+kubectl describe pod <Pod名称>
+
+# 查看Pod日志
+kubectl logs <Pod名称>
+
+# 进入Pod内部执行命令
+kubectl exec -it <Pod名称> -- /bin/sh
+```
+
+### 服务管理
+
+```bash
+# 查看所有服务
+kubectl get services
+
+# 查看服务详细信息
+kubectl describe service <服务名称>
+```
+
+## 4. 集群健康检查
+
+```bash
+# 检查所有Pod状态
+kubectl get pods --all-namespaces
+
+# 检查NFS服务器状态
+kubectl get pods -l app=nfs-server
+kubectl get svc nfs-server
+
+# 检查PV和PVC状态
+kubectl get pv
+kubectl get pvc
+```
+
+## 5. 存储卷管理 (PV/PVC)
+
+### 查看存储卷
+
+```bash
+# 查看持久卷(PV)
+kubectl get pv
+
+# 查看持久卷声明(PVC)
+kubectl get pvc
+
+# 查看存储类
+kubectl get storageclass
+```
+
+### 存储卷详情
+
+当前环境配置了基于NFS的存储卷：
+
+- **PV名称**：nfs-pv
+- **容量**：1Gi
+- **访问模式**：ReadWriteMany
+- **存储类**：nfs
+- **NFS服务器**：nfs-server.default.svc.cluster.local
+
+- **PVC名称**：nfs-pvc
+- **容量请求**：1Gi
+- **访问模式**：ReadWriteMany
+- **存储类**：nfs
+
+## 6. 部署Jenkins Pod使用NFS存储
+
+### 创建Jenkins PVC
+
+创建文件 `jenkins-pvc.yaml`：
+
+```yaml:d:\itzdd-lab\k8s-kind-nfs-terraform\manifests\jenkins-pvc.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jenkins-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: nfs
+  resources:
+    requests:
+      storage: 1Gi
+```
+
+### 创建Jenkins部署
+
+创建文件 `jenkins-deployment.yaml`：
+
+```yaml:d:\itzdd-lab\k8s-kind-nfs-terraform\manifests\jenkins-deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jenkins
+  labels:
+    app: jenkins
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jenkins
+  template:
+    metadata:
+      labels:
+        app: jenkins
+    spec:
+      containers:
+      - name: jenkins
+        image: jenkins/jenkins:lts
+        ports:
+        - containerPort: 8080
+          name: web
+        - containerPort: 50000
+          name: agent
+        volumeMounts:
+        - name: jenkins-home
+          mountPath: /var/jenkins_home
+      volumes:
+      - name: jenkins-home
+        persistentVolumeClaim:
+          claimName: jenkins-pvc
+```
+
+### 创建Jenkins服务
+
+创建文件 `jenkins-service.yaml`：
+
+```yaml:d:\itzdd-lab\k8s-kind-nfs-terraform\manifests\jenkins-service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: jenkins
+spec:
+  type: NodePort
+  ports:
+  - port: 8080
+    targetPort: 8080
+    nodePort: 30080
+    name: web
+  - port: 50000
+    targetPort: 50000
+    name: agent
+  selector:
+    app: jenkins
+```
+
+### 部署Jenkins
+
+```bash
+# 创建PVC
+kubectl apply -f manifests/jenkins-pvc.yaml
+
+# 部署Jenkins
+kubectl apply -f manifests/jenkins-deployment.yaml
+
+# 创建服务
+kubectl apply -f manifests/jenkins-service.yaml
+```
+
+### 访问Jenkins
+
+部署完成后，可以通过以下URL访问Jenkins：
+
+```
+http://localhost:30080
+```
+
+初始管理员密码可以通过以下命令获取：
+
+```bash
+kubectl exec -it $(kubectl get pods -l app=jenkins -o jsonpath='{.items[0].metadata.name}') -- cat /var/jenkins_home/secrets/initialAdminPassword
+```
+
+## 7. 常见问题排查
+
+### PV/PVC绑定问题
+
+如果PVC一直处于Pending状态：
+
+```bash
+# 检查PVC状态
+kubectl describe pvc <pvc名称>
+
+# 检查PV状态
+kubectl describe pv <pv名称>
+
+# 检查StorageClass
+kubectl get storageclass
+```
+
+### NFS服务器问题
+
+```bash
+# 检查NFS服务器Pod状态
+kubectl get pods -l app=nfs-server
+
+# 查看NFS服务器日志
+kubectl logs -l app=nfs-server
+```
+
+### Pod无法启动
+
+```bash
+# 查看Pod详情
+kubectl describe pod <pod名称>
+
+# 查看Pod日志
+kubectl logs <pod名称>
+```
+
+## 8. 清理环境
+
+```bash
+# 删除所有资源
+cd terraform
+terraform destroy
+```
+
+---
+
+本文档提供了Kind Kubernetes集群的基本使用说明，包括集群信息、基本命令、健康检查以及如何部署使用NFS存储的Jenkins。如有更多需求，请参考Kubernetes官方文档或Kind项目文档。
+        当前模型请求量过大，请求排队约 1 位，请稍候或切换至其他模型问答体验更流畅。
