@@ -20,9 +20,9 @@ terraform {
 resource "kind_cluster" "k8s_cluster" {
   name = var.cluster_name
   kind_config {
-    kind = "Cluster"
+    kind        = "Cluster"
     api_version = "kind.x-k8s.io/v1alpha4"
-    
+
     # 控制平面节点
     node {
       role = "control-plane"
@@ -31,16 +31,16 @@ resource "kind_cluster" "k8s_cluster" {
       ]
       extra_port_mappings {
         container_port = 80
-        host_port = 80
-        protocol = "TCP"
+        host_port      = 80
+        protocol       = "TCP"
       }
       extra_port_mappings {
         container_port = 443
-        host_port = 443
-        protocol = "TCP"
+        host_port      = 443
+        protocol       = "TCP"
       }
     }
-    
+
     # 两个工作节点
     node {
       role = "worker"
@@ -99,27 +99,27 @@ resource "null_resource" "wait_for_nfs" {
 # 部署 NFS 动态供应器
 resource "helm_release" "nfs_subdir_external_provisioner" {
   depends_on = [null_resource.wait_for_nfs]
-  
+
   name       = "nfs-subdir-external-provisioner"
   repository = "https://kubernetes-sigs.github.io/nfs-subdir-external-provisioner"
   chart      = "nfs-subdir-external-provisioner"
   namespace  = "nfs-system"
-  
+
   set {
     name  = "nfs.server"
     value = "nfs-server.nfs-system.svc.cluster.local"
   }
-  
+
   set {
     name  = "nfs.path"
     value = "/"
   }
-  
+
   set {
     name  = "storageClass.name"
     value = "nfs-client"
   }
-  
+
   set {
     name  = "storageClass.defaultClass"
     value = "true"
@@ -129,13 +129,13 @@ resource "helm_release" "nfs_subdir_external_provisioner" {
 # 创建示例 PVC 来测试动态供应
 resource "kubernetes_persistent_volume_claim" "test_pvc" {
   depends_on = [helm_release.nfs_subdir_external_provisioner]
-  
+
   metadata {
     name      = "test-pvc"
     namespace = "default"
   }
   spec {
-    access_modes = ["ReadWriteMany"]
+    access_modes       = ["ReadWriteMany"]
     storage_class_name = "nfs-client"
     resources {
       requests = {
